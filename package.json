@@ -1,0 +1,25 @@
+{
+  "name": "8bitai",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "description": "8bitAI — Level 4 Device Agent (D00–D09) — Contract-first",
+  "scripts": {
+    "lint:arch": "node tools/arch-lint/lint.mjs",
+    "lint:arch:verbose": "node tools/arch-lint/lint.mjs --verbose",
+    "lint:types": "tsc --noEmit -p tsconfig.application.json",
+    "lint:types:all": "tsc --noEmit",
+    "lint:no-any": "node tools/arch-lint/check-no-any.mjs",
+    "check": "npm run lint:arch && npm run lint:no-any && npm run lint:types",
+    "check:ci": "npm run check --silent",
+    "bootstrap": "tsx src/core/application/bootstrap.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

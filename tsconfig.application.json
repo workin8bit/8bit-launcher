@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true
+  },
+  "include": ["src/core/application/**/*.ts", "src/features/**/*.ts", "tools/arch-lint/**/*.mjs"],
+  "exclude": ["src/core/execution/**", "node_modules", "dist"]
+}

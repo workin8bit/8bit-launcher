@@ -1,0 +1,27 @@
+name: Architecture Lint (D09)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  arch-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts || npm install
+      - name: D09 Architecture Lint
+        run: npm run lint:arch
+      - name: No-any check
+        run: npm run lint:no-any
+      - name: Type check
+        run: npm run lint:types
+      - name: Enforce checks on failure
+        if: failure()
+        run: echo "❌ Architecture boundary violated — see logs. Docs: Dokumen-09 §66-68, tools/arch-lint/config.mjs"
