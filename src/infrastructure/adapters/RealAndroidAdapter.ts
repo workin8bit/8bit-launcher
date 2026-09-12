@@ -1,5 +1,5 @@
 /**
- * D11 — RealAndroidAdapter (stub — delegates to D06 NativeBridge)
+ * D11 — RealAndroidAdapter (delegates to D06 NativeBridge)
  * ViewModel never calls Android directly — only via Facade → Service → RealAdapter → NativeBridge
  */
 
@@ -7,6 +7,7 @@ import type { AndroidAdapter } from "../../core/application/adapters/AndroidAdap
 import type { AndroidAppInfo } from "../../core/application/types/ProjectionTypes";
 import type { Result } from "../../core/application/types/ApplicationTypes";
 
+// Authority interface — D06
 type NativeBridgeLike = {
   getInstalledApps(userId: string): Promise<AndroidAppInfo[]>;
   openApp(packageName: string, userId: string): Promise<void>;
@@ -20,7 +21,6 @@ export class RealAndroidAdapter implements AndroidAdapter {
   async getInstalledApps(userId: string): Promise<Result<AndroidAppInfo[]>> {
     try {
       const data = await this.nativeBridge.getInstalledApps(userId);
-      // Projection already — no raw Intent leakage
       return { success: true, data };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

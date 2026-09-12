@@ -19,7 +19,7 @@ import fs from "fs";
 import path from "path";
 import { LAYERS, ALLOWED_IMPORTS, FORBIDDEN_IMPORT_PATTERNS, PUBLIC_BOUNDARY, DI_ONLY, SCAN_GLOBS, IGNORE_PATTERNS } from "./config.mjs";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const ROOT = path.resolve(import.meta.dirname, "../..");
 const VERBOSE = process.argv.includes("--verbose");
 const violations = [];
 

@@ -1,11 +1,12 @@
 /**
- * D11 — RealMemoryAdapter (stub — delegates to D05 MemoryRepository)
+ * D11 — RealMemoryAdapter (delegates to D05 MemoryRepository)
  * Adapter only translates — embedding/policy remain D05 authority
  */
 
 import type { MemoryAdapter } from "../../core/application/adapters/MemoryAdapter";
 import type { Result } from "../../core/application/types/ApplicationTypes";
 
+// Authority interface — D05
 type MemoryRepositoryLike = {
   create(payload: { content: string; type: string; userId: string }): Promise<{ id: string }>;
   search(params: { query: string; topK?: number; userId: string }): Promise<unknown[]>;

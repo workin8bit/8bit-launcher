@@ -2,6 +2,7 @@
  * D09 §89-90, D11 §5 — Bootstrap (Load Config → DI → Session → Repositories → Adapters → Stores → Routing → Hydrate → READY)
  * D11: Fake → Real via DI — ViewModel/Store/UI unchanged
  * Only bootstrap.ts + di/* may `new Real*` (D09A di-only)
+ * Commit 3: replace stub authorities with real implementations (InsForge/Vercel/Capacitor)
  */
 
 import { Container, createApplicationContainer } from "./di/Container";
@@ -29,75 +30,30 @@ import { RealMemoryAdapter } from "../../infrastructure/adapters/RealMemoryAdapt
 import { RealAndroidAdapter } from "../../infrastructure/adapters/RealAndroidAdapter";
 import { RealSchedulerAdapter } from "../../infrastructure/adapters/RealSchedulerAdapter";
 
+// Real authorities — D05/D06/D07/D07A/D07B
+import { RealExecutionEngine } from "../../infrastructure/authorities/RealExecutionEngine";
+import { RealSyncQueue } from "../../infrastructure/authorities/RealSyncQueue";
+import { RealMemoryRepository } from "../../infrastructure/authorities/RealMemoryRepository";
+import { RealNativeBridge } from "../../infrastructure/authorities/RealNativeBridge";
+import { RealScheduler } from "../../infrastructure/authorities/RealScheduler";
+
 export type BootstrapEnv = "test" | "development" | "production";
 export interface BootstrapOptions {
   env?: BootstrapEnv;
-  // Allow test to inject custom authorities — still via DI, not ViewModel
   overrides?: Partial<Record<symbol, unknown>>;
 }
 
 function resolveEnv(explicit?: BootstrapEnv): BootstrapEnv {
   if (explicit) return explicit;
-  // Node / Vite / Next — prefer explicit, fallback to NODE_ENV
   const nodeEnv = (typeof process !== "undefined" ? (process.env.NODE_ENV as string) : undefined) ?? "production";
   if (nodeEnv === "test") return "test";
   if (nodeEnv === "development") return "development";
   return "production";
 }
 
-// Minimal in-memory authorities for stub Real adapters (so Real path works without full D05–D07B implementation)
-// In production these will be replaced by real InsForge/NativeBridge/SyncQueue
-function createStubAuthorities() {
-  const syncStatus = { status: "SYNCED" as const, pendingCount: 0, syncingCount: 0, failedCount: 0, conflictCount: 0, lastSyncAt: new Date().toISOString() };
-  return {
-    // D07 Execution — stub that satisfies ExecutionEngineLike
-    executionEngine: {
-      async execute() { return { success: true as const, data: { executionId: `exec_${Date.now()}` } }; },
-      async getExecution() { return null; },
-      async pause() { return { success: true as const, data: undefined }; },
-      async cancel() { return { success: true as const, data: undefined }; },
-    },
-    // D07B Sync — stub
-    syncQueue: {
-      async getStatus() { return { ...syncStatus }; },
-      observeStatus(_userId: string, _cb: (s: typeof syncStatus) => void) { return () => {}; },
-      async flush() {},
-      async getPending() { return []; },
-      async getConflicts() { return []; },
-    },
-    syncTransport: {},
-    // D05 Memory — stub
-    memoryRepository: {
-      async create(payload: { content: string; type: string; userId: string }) { return { id: `mem_${Date.now()}` }; },
-      async search() { return []; },
-      async read() { return null; },
-      async delete() {},
-      async getContext() { return {}; },
-    },
-    embeddingService: {},
-    // D06 Android — stub
-    nativeBridge: {
-      async getInstalledApps() { return [{ packageName: "com.android.chrome", label: "Chrome", launchable: true }]; },
-      async openApp() {},
-      async getPermissionState() { return { state: "GRANTED" as const }; },
-      observeLifecycle() { return () => {}; },
-    },
-    // D07A Scheduler — stub
-    scheduler: {
-      async schedule() { return { executionId: `sched_${Date.now()}` }; },
-      async cancelSchedule() {},
-      async pauseSchedule() {},
-      async resumeSchedule() {},
-      async getSchedule() { return { queued: 0 }; },
-      observeSchedule() { return () => {}; },
-    },
-  };
-}
-
 export function bootstrapApplication(opts: BootstrapOptions = {}): { container: Container; facade: ApplicationFacade; env: BootstrapEnv } {
   const env = resolveEnv(opts.env);
   const container = createApplicationContainer();
-  const stubs = createStubAuthorities();
 
   // 1. Buses — shared
   const eventBus = new InMemoryEventBus();
@@ -106,16 +62,18 @@ export function bootstrapApplication(opts: BootstrapOptions = {}): { container: 
   container.registerInstance(TOKENS.InteractionBus, interactionBus);
   container.registerInstance(TOKENS.Clock, { now: () => new Date().toISOString() });
 
-  // Register stub authorities so Real adapters can resolve them via DI
-  container.registerInstance(TOKENS.ExecutionEngine, opts.overrides?.[TOKENS.ExecutionEngine] ?? stubs.executionEngine);
-  container.registerInstance(TOKENS.SyncQueue, opts.overrides?.[TOKENS.SyncQueue] ?? stubs.syncQueue);
-  container.registerInstance(TOKENS.SyncTransport, opts.overrides?.[TOKENS.SyncTransport] ?? stubs.syncTransport);
-  container.registerInstance(TOKENS.MemoryRepository, opts.overrides?.[TOKENS.MemoryRepository] ?? stubs.memoryRepository);
-  container.registerInstance(TOKENS.EmbeddingService, opts.overrides?.[TOKENS.EmbeddingService] ?? stubs.embeddingService);
-  container.registerInstance(TOKENS.NativeBridge, opts.overrides?.[TOKENS.NativeBridge] ?? stubs.nativeBridge);
-  container.registerInstance(TOKENS.Scheduler, opts.overrides?.[TOKENS.Scheduler] ?? stubs.scheduler);
+  // 2. Real authorities — D05/D06/D07/D07A/D07B (only in non-test env)
+  if (env !== "test") {
+    container.registerInstance(TOKENS.ExecutionEngine, new RealExecutionEngine());
+    container.registerInstance(TOKENS.SyncQueue, new RealSyncQueue());
+    container.registerInstance(TOKENS.SyncTransport, {}); // transport is inside SyncQueue
+    container.registerInstance(TOKENS.MemoryRepository, new RealMemoryRepository());
+    container.registerInstance(TOKENS.EmbeddingService, {}); // keyword-only fallback
+    container.registerInstance(TOKENS.NativeBridge, new RealNativeBridge());
+    container.registerInstance(TOKENS.Scheduler, new RealScheduler());
+  }
 
-  // 2. Adapters — D11 DI switch: test → Fake, prod/dev → Real (same contract)
+  // 3. Adapters — D11 DI switch: test → Fake, prod/dev → Real (same contract)
   if (env === "test") {
     container.registerInstance(TOKENS.ExecutionAdapter, new FakeExecutionAdapter());
     container.registerInstance(TOKENS.SchedulerAdapter, new FakeSchedulerAdapter());
@@ -145,14 +103,14 @@ export function bootstrapApplication(opts: BootstrapOptions = {}): { container: 
     );
   }
 
-  // Allow overrides for adapters too (for contract tests that want to swap)
+  // Allow overrides for adapters (contract tests)
   if (opts.overrides?.[TOKENS.ExecutionAdapter]) container.registerInstance(TOKENS.ExecutionAdapter, opts.overrides[TOKENS.ExecutionAdapter] as never);
   if (opts.overrides?.[TOKENS.SyncAdapter]) container.registerInstance(TOKENS.SyncAdapter, opts.overrides[TOKENS.SyncAdapter] as never);
   if (opts.overrides?.[TOKENS.MemoryAdapter]) container.registerInstance(TOKENS.MemoryAdapter, opts.overrides[TOKENS.MemoryAdapter] as never);
   if (opts.overrides?.[TOKENS.AndroidAdapter]) container.registerInstance(TOKENS.AndroidAdapter, opts.overrides[TOKENS.AndroidAdapter] as never);
   if (opts.overrides?.[TOKENS.SchedulerAdapter]) container.registerInstance(TOKENS.SchedulerAdapter, opts.overrides[TOKENS.SchedulerAdapter] as never);
 
-  // 3. Services — orchestration, delegation only — unchanged
+  // 4. Services — orchestration, delegation only — unchanged
   const executionService = new ExecutionService(container.resolve(TOKENS.ExecutionAdapter) as never, eventBus);
   const schedulerService = new SchedulerService(container.resolve(TOKENS.SchedulerAdapter) as never);
   const syncService = new SyncService(container.resolve(TOKENS.SyncAdapter) as never);
@@ -165,16 +123,13 @@ export function bootstrapApplication(opts: BootstrapOptions = {}): { container: 
   container.registerInstance(TOKENS.MemoryService, memoryService);
   container.registerInstance(TOKENS.AndroidService, androidService);
 
-  // 4. Stores — presentation state only
+  // 5. Stores — presentation state only
   container.registerInstance(TOKENS.ExecutionViewStore, new ExecutionViewStore());
   container.registerInstance(TOKENS.SyncViewStore, new SyncViewStore());
 
-  // 5. Facade — stable boundary — unchanged
+  // 6. Facade — stable boundary — unchanged
   const facade = new ApplicationFacade(executionService, schedulerService, syncService, memoryService, androidService);
   container.registerInstance(TOKENS.ApplicationFacade, facade);
-
-  // 6. Hydration would happen here: query authorities → fill stores → READY
-  // D09 §140 Hydration order: Session → UserContext → Critical → Feature → Non-critical
 
   return { container, facade, env };
 }

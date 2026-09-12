@@ -1,11 +1,12 @@
 /**
- * D11 — RealSchedulerAdapter (stub — delegates to D07A Scheduler)
+ * D11 — RealSchedulerAdapter (delegates to D07A Scheduler)
  * Adapter translates priority only — D07A owns scheduling semantics
  */
 
 import type { SchedulerAdapter } from "../../core/application/adapters/SchedulerAdapter";
 import type { Result } from "../../core/application/types/ApplicationTypes";
 
+// Authority interface — D07A
 type SchedulerLike = {
   schedule(plan: unknown, context: unknown, opts?: { priority?: string; lifecycle?: string }): Promise<{ executionId: string }>;
   cancelSchedule(executionId: string, userId: string): Promise<void>;

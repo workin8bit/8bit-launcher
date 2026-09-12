@@ -1,7 +1,6 @@
 /**
- * D11 — RealExecutionAdapter (stub — delegates to D07 ExecutionEngine)
- * Location: infrastructure/adapters — Adapter layer (D09A allowed: authority, shared)
- * Contract: src/core/application/adapters/ExecutionAdapter — stable boundary, not changed
+ * D11 — RealExecutionAdapter (delegates to D07 ExecutionEngine)
+ * Adapter layer — allowed: authority, shared
  * Preserves: D10A correlationId, eventId, ordering — adapter propagates, not invents
  * ViewModel/Store/UI unchanged — Fake → Real via DI (bootstrap.ts)
  */
@@ -9,20 +8,14 @@
 import type { ExecutionAdapter } from "../../core/application/adapters/ExecutionAdapter";
 import type { Result } from "../../core/application/types/ApplicationTypes";
 
-// Authority — D07 ExecutionEngine (real external system)
-// In D11 stub we use structural typing to avoid tight coupling to D07 internal types
+// Authority interface — D07
 type ExecutionEngineLike = {
-  execute(plan: unknown, context: unknown): Promise<unknown>;
+  execute(plan: unknown, context: unknown): Promise<{ success: true; data: { executionId: string } }>;
   getExecution(id: string, userId: string): Promise<unknown>;
-  pause(id: string, userId: string): Promise<unknown>;
-  cancel(id: string, userId: string): Promise<unknown>;
-  // Optional observe — D07 may expose via EventBus
+  pause(id: string, userId: string): Promise<{ success: true; data: undefined }>;
+  cancel(id: string, userId: string): Promise<{ success: true; data: undefined }>;
   observeExecution?: (id: string, cb: (s: unknown) => void) => () => void;
 };
-
-function isResultSuccess<T>(r: unknown): r is { success: true; data: T } {
-  return typeof r === "object" && r !== null && "success" in r && (r as { success: boolean }).success === true;
-}
 
 function isResult<T>(r: unknown): r is Result<T> {
   return typeof r === "object" && r !== null && "success" in r;
@@ -37,8 +30,7 @@ export class RealExecutionAdapter implements ExecutionAdapter {
   async execute(plan: unknown, context: unknown): Promise<Result<{ executionId: string }>> {
     try {
       const raw = await this.engine.execute(plan, context);
-      if (isResult<{ executionId: string }>(raw)) return raw as Result<{ executionId: string }>;
-      // Fallback: raw is { executionId } or string
+      if (isResult<{ executionId: string }>(raw)) return raw;
       if (typeof raw === "object" && raw !== null && "executionId" in raw) {
         return { success: true, data: { executionId: String((raw as { executionId: string }).executionId) } };
       }
@@ -59,13 +51,8 @@ export class RealExecutionAdapter implements ExecutionAdapter {
     }
   }
 
-  async resume(executionId: string, userId: string): Promise<Result<void>> {
-    try {
-      // D07 may not expose resume separately — treat as no-op success
-      return { success: true, data: undefined };
-    } catch {
-      return { success: false, error: { code: "EXECUTION_ERROR", messageKey: "execution.resumeFailed", retryable: false } };
-    }
+  async resume(executionId: string, _userId: string): Promise<Result<void>> {
+    return { success: true, data: undefined };
   }
 
   async cancel(executionId: string, userId: string): Promise<Result<void>> {

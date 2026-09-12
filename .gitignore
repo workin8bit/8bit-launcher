@@ -2,3 +2,6 @@ node_modules/
 dist/
 .out/
 .coverage/
+.next/
+next-env.d.ts
+tsconfig.next.json
