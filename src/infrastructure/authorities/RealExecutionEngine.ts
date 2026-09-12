@@ -1,12 +1,14 @@
 /**
  * D11 — RealExecutionEngine (D07 authority)
- * Delegates to InsForge serverless execution + local-first persistence
+ * Local-first execution: durable record + enqueue to D07B SyncQueue for cloud sync.
  * Durable: localStorage for process-death recovery
  * D07 §99 at-least-once internally + idempotent externally
  * D07 §112 resume: LOAD → VALIDATE → RECHECK POLICY → RECHECK PERMISSION → RESUME
+ * D11 §5: ExecutionEngine must NOT know /api/sync — SyncTransport owns InsForge HTTP.
  */
 
 import { EXECUTIONS_KEY, type ExecutionRecord } from "./RealExecutionRepository";
+import { RealSyncQueue } from "./RealSyncQueue";
 
 interface EngineRecord extends ExecutionRecord {
   state: ExecutionRecord["state"];
@@ -34,14 +36,13 @@ function setState(map: Record<string, EngineRecord>, id: string, state: EngineRe
   }
 }
 
-const INSFORGE_URL = "https://4m4ujzk7.ap-southeast.insforge.app";
-const INSFORGE_ANON_KEY = "ik_49de6e3f03e9c9e54042887997fbdf22";
-
 export class RealExecutionEngine {
   private executions = loadExecutions();
   private listeners = new Map<string, Set<(state: unknown) => void>>();
   // D07 §186 / §99 — deterministic idempotency gate: same key → same executionId, never double-fire
   private idempotencyMap = new Map<string, string>();
+  // D07B — SyncQueue owns InsForge HTTP (/api/sync), not ExecutionEngine (D11 §5)
+  private syncQueue = new RealSyncQueue();
 
   async execute(
     plan: unknown,
@@ -73,7 +74,7 @@ export class RealExecutionEngine {
       idempotencyKey,
       plan,
       context: ctx,
-      state: "RUNNING",
+      state: "PENDING_SYNC",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -81,25 +82,15 @@ export class RealExecutionEngine {
     this.executions[executionId] = record;
     saveExecutions(this.executions);
 
-    try {
-      const res = await fetch(`${INSFORGE_URL}/api/agent`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${INSFORGE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          goal: (plan as { goal?: string })?.goal ?? "task",
-          userId: ctx?.userId ?? "user_demo",
-          idempotencyKey,
-          correlationId: ctx?.correlationId,
-        }),
-      });
-
-      setState(this.executions, executionId, res.ok ? "COMPLETED" : "FAILED");
-    } catch {
-      setState(this.executions, executionId, "PENDING_SYNC");
-    }
+    // D07B — enqueue to SyncQueue (outbox). SyncQueue owns InsForge HTTP (/api/sync).
+    // ExecutionEngine stays local-first: record is durable before any network call.
+    this.syncQueue.enqueue({
+      eventId: `evt_${executionId}`,
+      operation: "CREATE",
+      entity: "execution",
+      payload: { executionId, idempotencyKey, goal: (plan as { goal?: string })?.goal ?? "task", userId: ctx.userId ?? "user_demo" },
+      version: 1,
+    });
 
     saveExecutions(this.executions);
     this.notify(executionId, this.executions[executionId]);
