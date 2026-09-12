@@ -1,9 +1,10 @@
 # PR: feat(d11): Real Adapter Integration — Adapter Contract → Real Adapter → External System
 
 **Base:** `main` (D11 LOCKED 12 Sep 2026 19:30 WIB)  
-**Head:** `feat/d11-real-adapters` — 2 commits  
+**Head:** `feat/d11-real-adapters` — 7 commits  
 **Scope:** `FakeAdapter → RealAdapter` via DI only — `ViewModel/Store/UI` unchanged, `D10A` preserved  
-**Authority:** D00–D11 — no new authority — authority tetap D05/D06/D07/D07A/D07B
+**Authority:** D00–D11 — no new authority — authority tetap D05/D06/D07/D07A/D07B  
+**CI gates:** arch-lint 95 files 0 violations, no-any 93 files 0 violations, tsc --noEmit clean
 
 > **D10 defines what features promise. D10A defines how they interact. D11 defines how they connect to reality — without touching what they promised.**
 
@@ -32,14 +33,40 @@ D12  → (next) Draft implementation with real InsForge/WorkManager wiring
 
 ---
 
-## Commits
+## Commits (7 — head `feat/d11-real-adapters`)
 
 ```
 1a29091 feat(d11): Real*Adapter stubs — Adapter Contract → Real Adapter → Authority
         src/infrastructure/adapters/Real*.ts (5) — implements same interfaces, delegates to stub authorities
 
 a41157a feat(d11): bootstrap DI switch Fake→Real + contract tests
-        bootstrap.ts (env test→Fake, prod/dev→Real via TOKENS), tokens.ts (+ authority tokens), contract tests (5 suites Fake+Real)
+        bootstrap.ts (env test→Fake, prod/dev→Real via TOKENS), tokens.ts (+ authority tokens),
+        contract tests (5 suites Fake+Real)
+
+3672aa3 docs(d11): add PR description for review
+        PR-D11-DESCRIPTION.md committed
+
+e231716 chore(d11): remove workflow file from branch (PAT without workflow scope)
+        .github/workflows/arch-lint.yml removed — PAT lacks `workflow` scope
+
+64841a1 feat(d11): replace stub authorities with real InsForge/Capacitor implementations
+        Real authorities (D05/D06/D07/D07A/D07B): RealExecutionEngine, RealSyncQueue,
+        RealMemoryRepository, RealNativeBridge, RealScheduler — InsForge API + localStorage,
+        Capacitor bridge with graceful web fallback. bootstrap.ts env switch. Next.js web app
+        scaffolding (app/, postcss, tailwind, Doto font).
+
+18df780 feat(d11): RealExecutionEngine D07 integration + repository wiring
+        RealExecutionEngine: idempotencyKey (userId:goal:correlationId) + idempotencyMap gate,
+        resume() D07 §112 LOAD→VALIDATE→RECHECK POLICY→RECHECK PERMISSION→RESUME,
+        pause/cancel fail-closed. RealExecutionRepository (NEW, shares EXECUTIONS_KEY).
+        RealExecutionAdapter (engine, repository?, mapToViewState?) with repo fallback.
+        bootstrap.ts registers TOKENS.ExecutionRepository.
+
+93854da fix(d11): RealExecutionEngine local-first — enqueue via SyncQueue, not direct fetch
+        Per agreed endpoint split (/api/sync + /api/sync/ack + /api/agent/{id}):
+        ExecutionEngine is local-first, SyncTransport (RealSyncQueue) owns InsForge HTTP.
+        execute() creates durable PENDING_SYNC record then enqueues to RealSyncQueue (outbox).
+        No direct fetch in engine source — verified by regex scan.
 ```
 
 ---
@@ -128,16 +155,19 @@ git diff main -- Dokumen-*.md → 0 (D09/D10/D10A/D11 contracts unchanged)
 
 ---
 
-## Gates — Must PASS
+## Gates — Must PASS (verified 12 Sep 2026)
 
 ```
-✅ arch-lint: PASS — scanned 88 files (83 + 5 Real stubs), 0 violations, 0 whitelist
+✅ arch-lint: PASS — scanned 95 files, 0 violations, 0 whitelist
    Layers: UI, ViewModel, Store, Facade, Service, Adapter, Repository, Infrastructure, Authority, Shared (types/events/di/interaction)
    Rules: dependency-direction, forbidden-import, public-boundary, di-only, no-circular, authority-ownership + D10A cross-feature/mutation
-✅ no-any: PASS — scanned 86 files, 0 violations
+✅ no-any: PASS — scanned 93 files, 0 violations
 ✅ lint:types: PASS — tsc -p tsconfig.application.json (application + features + infrastructure)
 ✅ test:contracts: PASS — 5 adapters × Fake + Real (stub authority) — same Result shape
 ✅ bootstrap switch: PASS — test→Fake, prod→Real, Facade unchanged, ViewModel with either
+✅ Real authority verification (10/10): local-first (engine 0 direct fetch), engine source clean,
+   durable PENDING_SYNC, idempotency gate, repository, D07 §112 pause/resume/invalid-transition,
+   adapter repository fallback + NOT_FOUND
 ```
 
 `grep -r "arch-lint-allow" src/` → `0` (no whitelist)  
@@ -201,9 +231,10 @@ grep -r "INSFORGE\|ANON_KEY" src/features && echo "FAIL" || echo "PASS"
 
 ---
 
-## Next (Commit 3 — not in this PR)
+## Next (commit 5 — not in this PR)
 
-- Replace stub authorities (`createStubAuthorities()`) with real `D05 MemoryRepository (InsForge)`, `D06 NativeBridge (Capacitor)`, `D07 ExecutionEngine`, `D07B SyncQueue + InsForge Transport`, `D07A Scheduler (WorkManager)` — still only `bootstrap.ts` + `src/infrastructure/adapters/*` changes
+- **Android worker** (commit 5): poll `GET /api/sync` → execute native via `RealNativeBridge` (openApp/schedule) → `POST /api/sync/ack` with `idempotencyKey` → execution state `PENDING_SYNC` → `SYNCED`. MVP without device = honest `PENDING_SYNC` (D00 §13), no auto-ack serverless.
+- Endpoint split (agreed): `POST /api/sync` = enqueue outbox (Web & Android same), `POST /api/sync/ack` = Android ack (device-auth, only mutator), `GET /api/agent/{id}` = Web poll (read-only, idempotent). Rejected: single `/api/sync/outbox` both-ways — ack needs different permission (device-auth).
 - Add `tests/adapter-contract` with real `InsForge` staging (same suite, Real with real authority)
 
 ---
