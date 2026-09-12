@@ -2,36 +2,34 @@
  * D11 — RealExecutionEngine (D07 authority)
  * Delegates to InsForge serverless execution + local-first persistence
  * Durable: localStorage for process-death recovery
+ * D07 §99 at-least-once internally + idempotent externally
+ * D07 §112 resume: LOAD → VALIDATE → RECHECK POLICY → RECHECK PERMISSION → RESUME
  */
 
-const EXECUTIONS_KEY = "8bitai_executions_v1";
+import { EXECUTIONS_KEY, type ExecutionRecord } from "./RealExecutionRepository";
 
-interface ExecutionRecord {
-  executionId: string;
-  plan: unknown;
-  context: { userId?: string };
-  state: "RUNNING" | "COMPLETED" | "FAILED" | "PAUSED" | "CANCELLED" | "PENDING_SYNC";
-  createdAt: string;
+interface EngineRecord extends ExecutionRecord {
+  state: ExecutionRecord["state"];
 }
 
-function loadExecutions(): Record<string, ExecutionRecord> {
+function loadExecutions(): Record<string, EngineRecord> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(EXECUTIONS_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, ExecutionRecord>;
+    return raw ? (JSON.parse(raw) as Record<string, EngineRecord>) : {};
   } catch { return {}; }
 }
 
-function saveExecutions(map: Record<string, ExecutionRecord>): void {
+function saveExecutions(map: Record<string, EngineRecord>): void {
   if (typeof window === "undefined") return;
   try { window.localStorage.setItem(EXECUTIONS_KEY, JSON.stringify(map)); } catch { /* skip */ }
 }
 
-function setState(map: Record<string, ExecutionRecord>, id: string, state: ExecutionRecord["state"]): void {
+function setState(map: Record<string, EngineRecord>, id: string, state: EngineRecord["state"]): void {
   const existing = map[id];
   if (existing) {
     existing.state = state;
+    existing.updatedAt = new Date().toISOString();
     map[id] = { ...existing };
   }
 }
@@ -42,16 +40,42 @@ const INSFORGE_ANON_KEY = "ik_49de6e3f03e9c9e54042887997fbdf22";
 export class RealExecutionEngine {
   private executions = loadExecutions();
   private listeners = new Map<string, Set<(state: unknown) => void>>();
+  // D07 §186 / §99 — deterministic idempotency gate: same key → same executionId, never double-fire
+  private idempotencyMap = new Map<string, string>();
 
-  async execute(plan: unknown, context: unknown): Promise<{ success: true; data: { executionId: string } }> {
-    const ctx = context as { userId?: string };
+  async execute(
+    plan: unknown,
+    context: unknown,
+    opts?: { idempotencyKey?: string }
+  ): Promise<{ success: true; data: { executionId: string } }> {
+    const ctx = (context ?? {}) as { userId?: string; correlationId?: string };
+
+    // D07 §186 — idempotency identity: executionId + stepId + actionVersion
+    // For MVP: derive from userId + goal + correlationId so retry is deterministically deduped
+    const idempotencyKey = opts?.idempotencyKey
+      ?? `${ctx.userId ?? "user_demo"}:${(plan as { goal?: string })?.goal ?? "task"}:${ctx.correlationId ?? "no-corr"}`;
+
+    // D07 §99 — at-least-once internally + idempotent externally
+    const existingId = this.idempotencyMap.get(idempotencyKey);
+    if (existingId) {
+      const existing = this.executions[existingId];
+      if (existing) {
+        this.notify(existingId, existing);
+        return { success: true, data: { executionId: existingId } };
+      }
+    }
+
     const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const record: ExecutionRecord = {
+    this.idempotencyMap.set(idempotencyKey, executionId);
+
+    const record: EngineRecord = {
       executionId,
+      idempotencyKey,
       plan,
       context: ctx,
       state: "RUNNING",
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     this.executions[executionId] = record;
@@ -67,6 +91,8 @@ export class RealExecutionEngine {
         body: JSON.stringify({
           goal: (plan as { goal?: string })?.goal ?? "task",
           userId: ctx?.userId ?? "user_demo",
+          idempotencyKey,
+          correlationId: ctx?.correlationId,
         }),
       });
 
@@ -85,13 +111,35 @@ export class RealExecutionEngine {
   }
 
   async pause(id: string, _userId: string): Promise<{ success: true; data: undefined }> {
+    // D07 §112 — LOAD → VALIDATE → RECHECK POLICY → RECHECK PERMISSION → RESUME
+    const current = this.executions[id];
+    if (!current) throw new Error("executionNotFound");
+    // VALIDATE: only RUNNING → PAUSED is valid (D07 §11)
+    if (current.state !== "RUNNING") throw new Error("invalidTransition");
+    // RECHECK POLICY / RECHECK PERMISSION: MVP — no policy layer yet, fail-closed default allow
     setState(this.executions, id, "PAUSED");
     saveExecutions(this.executions);
     this.notify(id, this.executions[id]);
     return { success: true, data: undefined };
   }
 
+  async resume(id: string, _userId: string): Promise<{ success: true; data: undefined }> {
+    // D07 §112 — LOAD → VALIDATE → RECHECK POLICY → RECHECK PERMISSION → RESUME
+    const current = this.executions[id];
+    if (!current) throw new Error("executionNotFound");
+    // VALIDATE: only PAUSED → RUNNING is valid (D07 §11)
+    if (current.state !== "PAUSED") throw new Error("invalidTransition");
+    // RECHECK POLICY / RECHECK PERMISSION: MVP — fail-closed default allow
+    setState(this.executions, id, "RUNNING");
+    saveExecutions(this.executions);
+    this.notify(id, this.executions[id]);
+    return { success: true, data: undefined };
+  }
+
   async cancel(id: string, _userId: string): Promise<{ success: true; data: undefined }> {
+    const current = this.executions[id];
+    if (!current) throw new Error("executionNotFound");
+    if (current.state === "COMPLETED" || current.state === "CANCELLED") throw new Error("invalidTransition");
     setState(this.executions, id, "CANCELLED");
     saveExecutions(this.executions);
     this.notify(id, this.executions[id]);

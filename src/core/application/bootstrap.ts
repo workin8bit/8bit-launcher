@@ -32,6 +32,7 @@ import { RealSchedulerAdapter } from "../../infrastructure/adapters/RealSchedule
 
 // Real authorities — D05/D06/D07/D07A/D07B
 import { RealExecutionEngine } from "../../infrastructure/authorities/RealExecutionEngine";
+import { RealExecutionRepository } from "../../infrastructure/authorities/RealExecutionRepository";
 import { RealSyncQueue } from "../../infrastructure/authorities/RealSyncQueue";
 import { RealMemoryRepository } from "../../infrastructure/authorities/RealMemoryRepository";
 import { RealNativeBridge } from "../../infrastructure/authorities/RealNativeBridge";
@@ -65,6 +66,7 @@ export function bootstrapApplication(opts: BootstrapOptions = {}): { container: 
   // 2. Real authorities — D05/D06/D07/D07A/D07B (only in non-test env)
   if (env !== "test") {
     container.registerInstance(TOKENS.ExecutionEngine, new RealExecutionEngine());
+    container.registerInstance(TOKENS.ExecutionRepository, new RealExecutionRepository());
     container.registerInstance(TOKENS.SyncQueue, new RealSyncQueue());
     container.registerInstance(TOKENS.SyncTransport, {}); // transport is inside SyncQueue
     container.registerInstance(TOKENS.MemoryRepository, new RealMemoryRepository());
@@ -83,7 +85,10 @@ export function bootstrapApplication(opts: BootstrapOptions = {}): { container: 
   } else {
     container.registerInstance(
       TOKENS.ExecutionAdapter,
-      new RealExecutionAdapter(container.resolve(TOKENS.ExecutionEngine) as never)
+      new RealExecutionAdapter(
+        container.resolve(TOKENS.ExecutionEngine) as never,
+        container.resolve(TOKENS.ExecutionRepository) as never
+      )
     );
     container.registerInstance(
       TOKENS.SyncAdapter,

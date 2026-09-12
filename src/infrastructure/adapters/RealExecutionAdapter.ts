@@ -1,18 +1,21 @@
 /**
- * D11 — RealExecutionAdapter (delegates to D07 ExecutionEngine)
- * Adapter layer — allowed: authority, shared
+ * D11 — RealExecutionAdapter (delegates to D07 ExecutionEngine + Repository)
+ * Adapter layer — allowed: authority, repository, shared
  * Preserves: D10A correlationId, eventId, ordering — adapter propagates, not invents
  * ViewModel/Store/UI unchanged — Fake → Real via DI (bootstrap.ts)
+ * D11 §5: new RealExecutionAdapter(engine, repository?, mapToViewState?) — repository optional for backward compat
  */
 
 import type { ExecutionAdapter } from "../../core/application/adapters/ExecutionAdapter";
 import type { Result } from "../../core/application/types/ApplicationTypes";
+import type { RealExecutionRepository } from "../authorities/RealExecutionRepository";
 
 // Authority interface — D07
 type ExecutionEngineLike = {
-  execute(plan: unknown, context: unknown): Promise<{ success: true; data: { executionId: string } }>;
+  execute(plan: unknown, context: unknown, opts?: { idempotencyKey?: string }): Promise<{ success: true; data: { executionId: string } }>;
   getExecution(id: string, userId: string): Promise<unknown>;
   pause(id: string, userId: string): Promise<{ success: true; data: undefined }>;
+  resume(id: string, userId: string): Promise<{ success: true; data: undefined }>;
   cancel(id: string, userId: string): Promise<{ success: true; data: undefined }>;
   observeExecution?: (id: string, cb: (s: unknown) => void) => () => void;
 };
@@ -24,6 +27,7 @@ function isResult<T>(r: unknown): r is Result<T> {
 export class RealExecutionAdapter implements ExecutionAdapter {
   constructor(
     private engine: ExecutionEngineLike,
+    private repository?: RealExecutionRepository,
     private mapToViewState?: (raw: unknown) => unknown
   ) {}
 
@@ -51,8 +55,14 @@ export class RealExecutionAdapter implements ExecutionAdapter {
     }
   }
 
-  async resume(executionId: string, _userId: string): Promise<Result<void>> {
-    return { success: true, data: undefined };
+  async resume(executionId: string, userId: string): Promise<Result<void>> {
+    try {
+      const r = await this.engine.resume(executionId, userId);
+      if (isResult<void>(r)) return r;
+      return { success: true, data: undefined };
+    } catch {
+      return { success: false, error: { code: "EXECUTION_ERROR", messageKey: "execution.resumeFailed", retryable: false } };
+    }
   }
 
   async cancel(executionId: string, userId: string): Promise<Result<void>> {
@@ -78,6 +88,14 @@ export class RealExecutionAdapter implements ExecutionAdapter {
           return { success: true, data: projected };
         }
         return r;
+      }
+      // D11 §5 — repository fallback preserves durable data when engine returns null
+      if (this.repository) {
+        const repoRecord = this.repository.get(executionId);
+        if (repoRecord) {
+          const projected = this.mapToViewState ? this.mapToViewState(repoRecord) : repoRecord;
+          return { success: true, data: projected };
+        }
       }
       if (r === null || r === undefined) {
         return { success: false, error: { code: "NOT_FOUND", messageKey: "execution.notFound", retryable: false } };
