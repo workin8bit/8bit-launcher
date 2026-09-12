@@ -16,6 +16,9 @@ export interface MemoryAdapter {
 export class FakeMemoryAdapter implements MemoryAdapter {
   private store = new Map<string, unknown>();
   async createMemory(payload: { content: string; type: string; userId: string }): Promise<Result<{ id: string }>> {
+    if (!payload.content.trim()) {
+      return { success: false, error: { code: "VALIDATION_ERROR", messageKey: "memory.contentRequired", retryable: false } };
+    }
     const id = `mem_${Date.now()}`;
     this.store.set(id, { id, ...payload });
     return { success: true, data: { id } };

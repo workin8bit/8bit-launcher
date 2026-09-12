@@ -19,7 +19,12 @@ export class FakeAndroidAdapter implements AndroidAdapter {
   async getInstalledApps(): Promise<Result<AndroidAppInfo[]>> {
     return { success: true, data: [{ packageName: "com.android.chrome", label: "Chrome", launchable: true }] };
   }
-  async openApp(): Promise<Result<void>> { return { success: true, data: undefined }; }
+  async openApp(packageName: string, _userId?: string): Promise<Result<void>> {
+    if (!packageName.trim()) {
+      return { success: false, error: { code: "VALIDATION_ERROR", messageKey: "android.packageRequired", retryable: false } };
+    }
+    return { success: true, data: undefined };
+  }
   async getPermissionState(): Promise<Result<{ state: "GRANTED"|"DENIED"|"UNKNOWN"|"RESTRICTED" }>> {
     return { success: true, data: { state: "GRANTED" } };
   }

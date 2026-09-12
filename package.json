@@ -12,6 +12,7 @@
     "lint:no-any": "node tools/arch-lint/check-no-any.mjs",
     "check": "npm run lint:arch && npm run lint:no-any && npm run lint:types",
     "check:ci": "npm run check --silent",
+    "test:contracts": "tsx tests/adapter-contract/runner.ts",
     "bootstrap": "tsx src/core/application/bootstrap.ts"
   },
   "devDependencies": {
