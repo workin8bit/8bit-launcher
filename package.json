@@ -13,14 +13,31 @@
     "check": "npm run lint:arch && npm run lint:no-any && npm run lint:types",
     "check:ci": "npm run check --silent",
     "test:contracts": "tsx tests/adapter-contract/runner.ts",
-    "bootstrap": "tsx src/core/application/bootstrap.ts"
+    "bootstrap": "tsx src/core/application/bootstrap.ts",
+    "build": "npx next build",
+    "sync": "npx cap sync android",
+    "dev": "npx next dev -p 3000"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

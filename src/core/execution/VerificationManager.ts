@@ -31,6 +31,13 @@ export class VerificationManager implements IVerificationManager {
 
     // 3. Evaluate rule safely (not eval) — MVP supports simple rules
     const rule = step.verification.rule;
+    if (!rule) {
+      return {
+        success: true,
+        reason: "No verification rule — tool success accepted",
+        evidence: result.data,
+      };
+    }
     const evidence = result.data as Record<string, unknown> | undefined;
 
     try {

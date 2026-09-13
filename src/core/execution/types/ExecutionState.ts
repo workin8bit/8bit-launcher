@@ -36,16 +36,16 @@ export const TERMINAL_STATES: ReadonlySet<ExecutionState> = new Set([
  * Invalid transition MUST be rejected (fail-closed)
  */
 export const VALID_TRANSITIONS: ReadonlyMap<ExecutionState, ReadonlySet<ExecutionState>> = new Map([
-  ["CREATED", new Set(["VALIDATING"])],
-  ["VALIDATING", new Set(["READY", "DENIED", "FAILED"])],
-  ["READY", new Set(["RUNNING", "CANCELLED"])],
-  ["RUNNING", new Set(["VERIFYING", "WAITING_PERMISSION", "WAITING_USER", "WAITING_NETWORK", "WAITING_LIFECYCLE", "RECOVERING", "FAILED", "CANCELLED"])],
-  ["VERIFYING", new Set(["RUNNING", "RECOVERING", "COMPLETED", "FAILED"])],
-  ["RECOVERING", new Set(["RUNNING", "WAITING_USER", "WAITING_NETWORK", "FAILED", "CANCELLED"])],
-  ["WAITING_PERMISSION", new Set(["RUNNING", "DENIED", "CANCELLED"])],
-  ["WAITING_USER", new Set(["RUNNING", "CANCELLED"])],
-  ["WAITING_NETWORK", new Set(["RUNNING", "FAILED", "CANCELLED"])],
-  ["WAITING_LIFECYCLE", new Set(["RUNNING", "RECOVERING", "CANCELLED"])],
+  ["CREATED", new Set<ExecutionState>(["VALIDATING"])],
+  ["VALIDATING", new Set<ExecutionState>(["READY", "DENIED", "FAILED"])],
+  ["READY", new Set<ExecutionState>(["RUNNING", "CANCELLED"])],
+  ["RUNNING", new Set<ExecutionState>(["VERIFYING", "WAITING_PERMISSION", "WAITING_USER", "WAITING_NETWORK", "WAITING_LIFECYCLE", "RECOVERING", "FAILED", "CANCELLED"])],
+  ["VERIFYING", new Set<ExecutionState>(["RUNNING", "RECOVERING", "COMPLETED", "FAILED"])],
+  ["RECOVERING", new Set<ExecutionState>(["RUNNING", "WAITING_USER", "WAITING_NETWORK", "FAILED", "CANCELLED"])],
+  ["WAITING_PERMISSION", new Set<ExecutionState>(["RUNNING", "DENIED", "CANCELLED"])],
+  ["WAITING_USER", new Set<ExecutionState>(["RUNNING", "CANCELLED"])],
+  ["WAITING_NETWORK", new Set<ExecutionState>(["RUNNING", "FAILED", "CANCELLED"])],
+  ["WAITING_LIFECYCLE", new Set<ExecutionState>(["RUNNING", "RECOVERING", "CANCELLED"])],
 ]);
 
 export type TransitionReason =
@@ -54,6 +54,7 @@ export type TransitionReason =
   | "PERMISSION_DENIED"
   | "PERMISSION_GRANTED"
   | "USER_CONFIRMED"
+  | "USER_CONFIRMATION_REQUIRED"
   | "USER_CANCELLED"
   | "NETWORK_AVAILABLE"
   | "NETWORK_LOST"

@@ -44,6 +44,7 @@ export interface PlanStep {
 
 export interface VerificationCriteria {
   type: VerificationType;
+  rule?: string;
   target: string;
   expected?: unknown;
   required: boolean;

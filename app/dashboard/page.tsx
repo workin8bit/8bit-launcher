@@ -15,7 +15,6 @@ export default function DashboardPage() {
     const { facade } = bootstrapApplication();
     const res = await facade.executeTask(goal, {
       userId: "user_demo",
-      permissions: [],
     });
     if (res.success) {
       setResult(`Task started: ${res.data.executionId}`);

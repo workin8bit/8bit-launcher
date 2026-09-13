@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
     const { facade } = bootstrapApplication();
     const result = await facade.executeTask(goal, {
       userId: userId || "user_demo",
-      permissions: [],
     });
 
     return NextResponse.json(result);

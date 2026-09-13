@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">8bitAI</string>
+    <string name="title_activity_main">8bitAI</string>
+    <string name="package_name">com.workin8bit.launcher</string>
+    <string name="custom_url_scheme">com.workin8bit.launcher</string>
+</resources>

@@ -18,13 +18,45 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@application/*": ["src/core/application/*"],
-      "@features/*": ["src/features/*"]
+      "@/*": [
+        "src/*"
+      ],
+      "@application/*": [
+        "src/core/application/*"
+      ],
+      "@features/*": [
+        "src/features/*"
+      ]
     },
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["src/**/*.ts", "tools/**/*.ts", "tools/**/*.mjs", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist", ".arena"]
+  "include": [
+    "src/**/*.ts",
+    "tools/**/*.ts",
+    "tools/**/*.mjs",
+    "scripts/**/*.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".arena"
+  ]
 }
