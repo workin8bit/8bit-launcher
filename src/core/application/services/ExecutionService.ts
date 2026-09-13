@@ -46,4 +46,16 @@ export class ExecutionService {
   async getExecution(query: { executionId: string; userContext: UserContext }): Promise<Result<unknown>> {
     return this.executionAdapter.getExecution(query.executionId, query.userContext.userId);
   }
+
+  // ── D07B worker (delegates to adapter; Fake adapter no-ops) ──
+  startWorker(userId: string, intervalMs = 5000): void {
+    const adapter = this.executionAdapter as unknown as { startWorker?: (u: string, ms?: number) => void };
+    if (adapter?.startWorker) adapter.startWorker(userId, intervalMs);
+  }
+
+  async processPending(userId: string): Promise<unknown[]> {
+    const adapter = this.executionAdapter as unknown as { processPending?: (u: string) => Promise<unknown[]> };
+    if (adapter?.processPending) return adapter.processPending(userId);
+    return [];
+  }
 }

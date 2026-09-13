@@ -100,4 +100,14 @@ export class ApplicationFacade {
   observeSync(userContext: UserContext, callback: (status: SyncStatus) => void): () => void {
     return this.syncService.observeSync(userContext, callback);
   }
+
+  // ── D07B worker (Android: poll /api/sync → execute native → ack /api/sync/ack) ──
+  // New methods — NOT part of the stable adapter contract. Web: degrade. Android: execute native.
+  startWorker(userId: string, intervalMs = 5000): void {
+    this.executionService.startWorker(userId, intervalMs);
+  }
+
+  async processPending(userId: string): Promise<unknown[]> {
+    return this.executionService.processPending(userId);
+  }
 }

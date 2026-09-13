@@ -34,4 +34,8 @@ export class FakeExecutionAdapter implements ExecutionAdapter {
     return { success: true, data: e };
   }
   observeExecution(_id: string, _userId: string, _cb: (s: unknown) => void): () => void { return () => {}; }
+
+  // D07B worker — Fake no-op (Real adapter delegates to engine)
+  startWorker(_userId: string, _intervalMs = 5000): void { /* no-op */ }
+  async processPending(_userId: string): Promise<unknown[]> { return []; }
 }

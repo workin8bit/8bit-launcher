@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { bootstrapApplication } from "@/core/application/bootstrap";
 
 export default function DashboardPage() {
   const [goal, setGoal] = useState("");
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState("PENDING_SYNC");
+
+  // Auto-start the Android worker on mount — no manual step needed
+  useEffect(() => {
+    const { facade } = bootstrapApplication();
+    // D07B worker — start polling /api/sync, execute native, ack /api/sync/ack
+    if (facade.startWorker) facade.startWorker("user_demo", 3000);
+    if (facade.processPending) facade.processPending("user_demo").catch(() => { /* ignore */ });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -18,6 +27,7 @@ export default function DashboardPage() {
     });
     if (res.success) {
       setResult(`Task started: ${res.data.executionId}`);
+      setSyncStatus("PENDING_SYNC");
     } else {
       setResult(`Error: ${res.error.messageKey}`);
     }

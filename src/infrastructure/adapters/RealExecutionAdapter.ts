@@ -18,6 +18,9 @@ type ExecutionEngineLike = {
   resume(id: string, userId: string): Promise<{ success: true; data: undefined }>;
   cancel(id: string, userId: string): Promise<{ success: true; data: undefined }>;
   observeExecution?: (id: string, cb: (s: unknown) => void) => () => void;
+  // D07B worker — optional (Fake adapter doesn't have one)
+  startWorker?: (userId: string, intervalMs?: number) => void;
+  processPending?: (userId: string) => Promise<unknown[]>;
 };
 
 function isResult<T>(r: unknown): r is Result<T> {
@@ -120,5 +123,16 @@ export class RealExecutionAdapter implements ExecutionAdapter {
       disposed = true;
       if (timer) clearInterval(timer);
     };
+  }
+
+  /** D07B worker — delegate to engine. Web: degrade. Android: executes native. */
+  startWorker(userId: string, intervalMs = 5000): void {
+    if (this.engine.startWorker) this.engine.startWorker(userId, intervalMs);
+  }
+
+  /** Process pending sync items once (poll + execute + ack). */
+  async processPending(userId: string): Promise<unknown[]> {
+    if (this.engine.processPending) return this.engine.processPending(userId);
+    return [];
   }
 }
