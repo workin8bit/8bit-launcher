@@ -1,7 +1,7 @@
 # PR: feat(d11): Real Adapter Integration — Adapter Contract → Real Adapter → External System
 
 **Base:** `main` (D11 LOCKED 12 Sep 2026 19:30 WIB)  
-**Head:** `feat/d11-real-adapters` — 7 commits  
+**Head:** `feat/d11-real-adapters` — 8 commits  
 **Scope:** `FakeAdapter → RealAdapter` via DI only — `ViewModel/Store/UI` unchanged, `D10A` preserved  
 **Authority:** D00–D11 — no new authority — authority tetap D05/D06/D07/D07A/D07B  
 **CI gates:** arch-lint 95 files 0 violations, no-any 93 files 0 violations, tsc --noEmit clean
@@ -155,7 +155,7 @@ git diff main -- Dokumen-*.md → 0 (D09/D10/D10A/D11 contracts unchanged)
 
 ---
 
-## Gates — Must PASS (verified 12 Sep 2026)
+## Gates — Must PASS (verified 13 Sep 2026)
 
 ```
 ✅ arch-lint: PASS — scanned 95 files, 0 violations, 0 whitelist
@@ -168,10 +168,24 @@ git diff main -- Dokumen-*.md → 0 (D09/D10/D10A/D11 contracts unchanged)
 ✅ Real authority verification (10/10): local-first (engine 0 direct fetch), engine source clean,
    durable PENDING_SYNC, idempotency gate, repository, D07 §112 pause/resume/invalid-transition,
    adapter repository fallback + NOT_FOUND
+✅ Opsi A E2E (5/5): Web execute → PENDING_SYNC → poll → idempotencyKey dedup →
+   worker ack → SYNCED → NOT_FOUND. Endpoint split honored.
 ```
 
 `grep -r "arch-lint-allow" src/` → `0` (no whitelist)  
-`grep -r "INSFORGE" src/features` → `0` (no secrets in feature)
+`grep -r "INSFORGE" src/features` → `0` (no secrets in feature)  
+`git diff main -- src/features` → `0 files` (final proof — 6 features untouched)
+
+## Endpoint Split (agreed commit 4)
+
+| Endpoint | Who | Purpose | Idempotency |
+|---|---|---|---|
+| `POST /api/sync` | Web & Android (same) | Enqueue outbox | `idempotencyKey` dedup (D07 §99/§186) |
+| `POST /api/sync/ack` | Android worker only | Ack → mutates SYNCED | device-auth, only mutator |
+| `GET /api/agent/{id}` | Web only | Poll status | read-only, idempotent |
+
+Rejected: single `/api/sync/outbox` both-ways — ack needs different permission (device-auth).
+`RealExecutionEngine` is local-first — `RealSyncQueue` (SyncTransport) owns InsForge HTTP (D11 §5).
 
 ---
 
