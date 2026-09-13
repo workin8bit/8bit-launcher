@@ -1,10 +1,11 @@
 # PR: feat(d11): Real Adapter Integration — Adapter Contract → Real Adapter → External System
 
 **Base:** `main` (D11 LOCKED 12 Sep 2026 19:30 WIB)  
-**Head:** `feat/d11-real-adapters` — 8 commits  
+**Head:** `feat/d11-real-adapters` — 11 commits  
 **Scope:** `FakeAdapter → RealAdapter` via DI only — `ViewModel/Store/UI` unchanged, `D10A` preserved  
 **Authority:** D00–D11 — no new authority — authority tetap D05/D06/D07/D07A/D07B  
-**CI gates:** arch-lint 95 files 0 violations, no-any 93 files 0 violations, tsc --noEmit clean
+**CI gates:** arch-lint 96 files 0 violations, no-any 94 files 0 violations, tsc --noEmit clean  
+**Build:** Capacitor Android APK 4.2 MB — `android/app/build/outputs/apk/debug/app-debug.apk`
 
 > **D10 defines what features promise. D10A defines how they interact. D11 defines how they connect to reality — without touching what they promised.**
 
@@ -12,11 +13,11 @@
 
 ## Summary
 
-PR ini mengimplementasikan **D11 Real Adapter Integration Contract** — mengganti `Fake*Adapter` (in-memory) dengan `Real*Adapter` (delegates ke `D05–D07B` authorities) **hanya di batas Adapter** melalui `DI`.
+PR ini mengimplementasikan **D11 Real Adapter Integration Contract** — mengganti `Fake*Adapter` (in-memory) dengan `Real*Adapter` (delegates ke `D05–D07B` authorities) **hanya di batas Adapter** melalui `DI`. Dilengkapi dengan D12 (Capacitor Android build → APK) dan D07B (AndroidSyncWorker — poll + ack), sehingga flow Opsi A berakhir di HP Android yang benar-benar mengeksekusi native action.
 
 - **Tidak ada** perubahan `src/features/*` (6 features) — `git diff main -- src/features` → `0`
 - **Tidak ada** perubahan `src/core/application/viewmodels|stores|ui` — `0`
-- **Hanya** `src/infrastructure/adapters/Real*.ts` (5 files) + `src/core/application/bootstrap.ts` + `di/tokens.ts` + contract tests
+- **Hanya** `src/infrastructure/adapters/Real*.ts` (5 files) + `src/infrastructure/authorities/Real*.ts` (6 authorities + worker) + `src/core/application/bootstrap.ts` + `di/tokens.ts` + contract tests + E2E tests
 
 ---
 
@@ -24,16 +25,17 @@ PR ini mengimplementasikan **D11 Real Adapter Integration Contract** — menggan
 
 ```
 D09  → HOW application coordinates (Facade → Service → Adapter Contract)
-D09A → ENFORCE dependency direction (gate — 88 files PASS)
+D09A → ENFORCE dependency direction (gate — 96 files PASS)
 D10  → WHAT each feature promises
 D10A → HOW features interact safely — LOCKED (correlation, dedup, lifecycle)
 D11  → Real Adapter Integration Contract — LOCKED ← this PR implements
-D12  → (next) Draft implementation with real InsForge/WorkManager wiring
+D12  → Capacitor Android build (web app → APK) — DONE in this branch
+D07B → AndroidSyncWorker (poll /api/sync + ack /api/sync/ack) — DONE in this branch
 ```
 
 ---
 
-## Commits (7 — head `feat/d11-real-adapters`)
+## Commits (11 — head `feat/d11-real-adapters`)
 
 ```
 1a29091 feat(d11): Real*Adapter stubs — Adapter Contract → Real Adapter → Authority
@@ -67,6 +69,29 @@ e231716 chore(d11): remove workflow file from branch (PAT without workflow scope
         ExecutionEngine is local-first, SyncTransport (RealSyncQueue) owns InsForge HTTP.
         execute() creates durable PENDING_SYNC record then enqueues to RealSyncQueue (outbox).
         No direct fetch in engine source — verified by regex scan.
+
+442e6a3 feat(d11): Opsi A E2E test + PR ready for review
+        tests/opsi-a-e2e.test.ts (5/5): Web execute → PENDING_SYNC → poll → idempotencyKey
+        dedup → worker ack → SYNCED → NOT_FOUND. Endpoint split table added to PR body.
+
+69dc7c6 feat(d12): Capacitor Android build — web app → APK
+        npm install @capacitor/core @capacitor/cli @capacitor/android, npx cap init,
+        npx cap add android, npm run build (output=export → out/), npx cap sync android,
+        ./android/gradlew assembleDebug → BUILD SUCCESSFUL in 42s.
+        APK: android/app/build/outputs/apk/debug/app-debug.apk (4.2 MB).
+        Pre-existing D07 type fixes surfaced by production build.
+
+10c2515 feat(d07b): AndroidSyncWorker — poll /api/sync + ack /api/sync/ack
+        Commit 5 — the device-side worker that turns PENDING_SYNC → SYNCED.
+        Without it the installed APK is just a web viewer; with it the phone executes
+        native actions (openApp/schedule) on queued commands.
+        AndroidSyncWorker.ts (NEW, shared class): start(userId) polls GET /api/sync,
+        executeAndAck() executes native via bridge → POST /api/sync/ack (only mutator
+        of SYNCED, D07B §9). Web degrades (nativeBridge=null → web_degraded, PENDING_SYNC
+        stays honest MVP state). RealSyncQueue.ack() mutates execution record
+        PENDING_SYNC → SYNCED (idempotent). RealExecutionEngine wires worker +
+        setNativeBridge. bootstrap.ts wires RealNativeBridge in non-test env.
+        tests/android-worker-e2e.test.ts (6/6 PASS).
 ```
 
 ---
@@ -158,10 +183,10 @@ git diff main -- Dokumen-*.md → 0 (D09/D10/D10A/D11 contracts unchanged)
 ## Gates — Must PASS (verified 13 Sep 2026)
 
 ```
-✅ arch-lint: PASS — scanned 95 files, 0 violations, 0 whitelist
+✅ arch-lint: PASS — scanned 96 files, 0 violations, 0 whitelist
    Layers: UI, ViewModel, Store, Facade, Service, Adapter, Repository, Infrastructure, Authority, Shared (types/events/di/interaction)
    Rules: dependency-direction, forbidden-import, public-boundary, di-only, no-circular, authority-ownership + D10A cross-feature/mutation
-✅ no-any: PASS — scanned 93 files, 0 violations
+✅ no-any: PASS — scanned 94 files, 0 violations
 ✅ lint:types: PASS — tsc -p tsconfig.application.json (application + features + infrastructure)
 ✅ test:contracts: PASS — 5 adapters × Fake + Real (stub authority) — same Result shape
 ✅ bootstrap switch: PASS — test→Fake, prod→Real, Facade unchanged, ViewModel with either
@@ -170,6 +195,11 @@ git diff main -- Dokumen-*.md → 0 (D09/D10/D10A/D11 contracts unchanged)
    adapter repository fallback + NOT_FOUND
 ✅ Opsi A E2E (5/5): Web execute → PENDING_SYNC → poll → idempotencyKey dedup →
    worker ack → SYNCED → NOT_FOUND. Endpoint split honored.
+✅ AndroidSyncWorker E2E (6/6): Web execute → PENDING_SYNC → worker poll /api/sync →
+   execute native (goal + openApp) → ack /api/sync/ack → SYNCED → Web poll →
+   idempotent ack (0 new native calls) → Web degrade (PENDING_SYNC stays honest MVP state)
+✅ D12 build: ./android/gradlew assembleDebug → BUILD SUCCESSFUL in 42s
+   APK: android/app/build/outputs/apk/debug/app-debug.apk (4.2 MB)
 ```
 
 `grep -r "arch-lint-allow" src/` → `0` (no whitelist)  
@@ -245,11 +275,12 @@ grep -r "INSFORGE\|ANON_KEY" src/features && echo "FAIL" || echo "PASS"
 
 ---
 
-## Next (commit 5 — not in this PR)
+## Next (post-merge)
 
-- **Android worker** (commit 5): poll `GET /api/sync` → execute native via `RealNativeBridge` (openApp/schedule) → `POST /api/sync/ack` with `idempotencyKey` → execution state `PENDING_SYNC` → `SYNCED`. MVP without device = honest `PENDING_SYNC` (D00 §13), no auto-ack serverless.
-- Endpoint split (agreed): `POST /api/sync` = enqueue outbox (Web & Android same), `POST /api/sync/ack` = Android ack (device-auth, only mutator), `GET /api/agent/{id}` = Web poll (read-only, idempotent). Rejected: single `/api/sync/outbox` both-ways — ack needs different permission (device-auth).
-- Add `tests/adapter-contract` with real `InsForge` staging (same suite, Real with real authority)
+- **Install APK** to phone: `adb install android/app/build/outputs/apk/debug/app-debug.apk` (or copy APK → tap Install). Fill `.env` with `INSFORGE_URL` + `ANON_KEY`.
+- **Run Opsi A flow**: Web `POST /api/sync` (PENDING_SYNC, idempotencyKey) → phone `engine.startWorker(userId)` poll `GET /api/sync?userId` → `openApp` → `POST /api/sync/ack` → Web poll `GET /api/agent/{id}` → SYNCED ✓
+- **Staging tests**: add `tests/adapter-contract` with real `InsForge` staging (same suite, Real with real authority)
+- **Production hardening**: WorkManager/AlarmManager replace `setTimeout` in `RealScheduler` (D07A); device-auth on `/api/sync/ack`
 
 ---
 
@@ -259,6 +290,8 @@ grep -r "INSFORGE\|ANON_KEY" src/features && echo "FAIL" || echo "PASS"
 2. Verify `bootstrap.ts` — `env===test ? Fake : Real` — only `new Real*` location — `D09A di-only`
 3. Run `npm run check && npm run test:contracts && npx tsx tests/bootstrap.switch.test.ts` — all PASS
 4. Check `git diff main -- src/features --stat` → empty
+5. Run `npx tsx tests/opsi-a-e2e.test.ts` (5/5) and `npx tsx tests/android-worker-e2e.test.ts` (6/6)
+6. Build APK: `npm run build && npx cap sync android && cd android && ./gradlew assembleDebug`
 
 ---
 
