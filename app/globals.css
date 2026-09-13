@@ -1,3 +1,93 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── 8bitAI Dark Mode — B&W Nothing OS-style ── */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0a0a0a;
+  background-image:
+    /* Grid de cuadrados (Nothing OS-style, pero cuadrados no dots) */
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 0;
+  color: #e8e8e8;
+  font-family: "Doto", monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+/* ── Ikon kotak (Nothing OS-style) ── */
+.ikon-kotak {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 2px solid #e8e8e8;
+  background: transparent;
+  font-family: "Doto", monospace;
+  font-size: 24px;
+  color: #e8e8e8;
+  transition: all 0.15s ease-out;
+  position: relative;
+}
+.ikon-kotak:hover {
+  background: #e8e8e8;
+  color: #0a0a0a;
+  transform: translate(-2px, -2px);
+  box-shadow: 2px 2px 0px 0px #0a0a0a;
+}
+.ikon-kotak:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+/* ── Widget kotak (Nothing OS-style) ── */
+.widget-kotak {
+  border: 2px solid #e8e8e8;
+  background: #141414;
+  padding: 16px;
+  position: relative;
+}
+.widget-kotak::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 2px solid #e8e8e8;
+  pointer-events: none;
+}
+
+/* ── Text utilities ── */
+.text-doto {
+  font-family: "Doto", monospace;
+}
+
+/* ── Base layer ── */
+@layer base {
+  * {
+    border-color: #333333;
+  }
+}
