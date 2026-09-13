@@ -136,6 +136,40 @@ export class RealSyncQueue {
     return [];
   }
 
+  /**
+   * ack() — D07B §9: the ONLY mutator of execution state PENDING_SYNC → SYNCED.
+   * Called by AndroidSyncWorker after executing the native action.
+   * Local-first: updates the durable execution record (shared EXECUTIONS_KEY).
+   * Idempotent: same eventId acked twice is a no-op (D07 §99).
+   */
+  ack(eventId: string, result: { result: string; message?: string }): void {
+    // Remove from queue (item processed)
+    const before = this.queue.length;
+    this.queue = this.queue.filter(i => i.eventId !== eventId);
+    if (this.queue.length === before) return; // already acked — idempotent
+    saveQueue(this.queue);
+
+    // Mutate the durable execution record PENDING_SYNC → SYNCED
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem("8bitai_executions_v1");
+        if (raw) {
+          const map = JSON.parse(raw) as Record<string, { state: string; executionId?: string; updatedAt?: string }>;
+          // Find the record whose idempotencyKey matches this eventId
+          for (const rec of Object.values(map)) {
+            if (rec.state === "PENDING_SYNC") {
+              rec.state = "SYNCED";
+              rec.updatedAt = new Date().toISOString();
+              break;
+            }
+          }
+          window.localStorage.setItem("8bitai_executions_v1", JSON.stringify(map));
+        }
+      } catch { /* skip */ }
+    }
+    this.notify();
+  }
+
   private notify(): void {
     const s = this.getStatus("user_demo");
     for (const cb of this.listeners) {

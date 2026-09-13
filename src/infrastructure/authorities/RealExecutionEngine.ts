@@ -9,6 +9,7 @@
 
 import { EXECUTIONS_KEY, type ExecutionRecord } from "./RealExecutionRepository";
 import { RealSyncQueue } from "./RealSyncQueue";
+import { AndroidSyncWorker, type NativeBridgeLike } from "./AndroidSyncWorker";
 
 interface EngineRecord extends ExecutionRecord {
   state: ExecutionRecord["state"];
@@ -43,6 +44,16 @@ export class RealExecutionEngine {
   private idempotencyMap = new Map<string, string>();
   // D07B — SyncQueue owns InsForge HTTP (/api/sync), not ExecutionEngine (D11 §5)
   private syncQueue = new RealSyncQueue();
+  // D07B worker — poll /api/sync → execute native → ack /api/sync/ack (only mutator of SYNCED)
+  // null nativeBridge = Web degrade (PENDING_SYNC stays, no native execution)
+  private worker = new AndroidSyncWorker(null, {
+    ack: (eventId: string, result) => this.syncQueue.ack(eventId, result),
+  });
+
+  /** Wire a real native bridge (Android: Capacitor; Web: stays null → degrade) */
+  setNativeBridge(bridge: NativeBridgeLike | null): void {
+    this.worker.setNativeBridge(bridge);
+  }
 
   async execute(
     plan: unknown,
@@ -94,6 +105,12 @@ export class RealExecutionEngine {
 
     saveExecutions(this.executions);
     this.notify(executionId, this.executions[executionId]);
+
+    // D07B — trigger worker to process pending items (poll + execute + ack).
+    // Web: degrades (no native bridge) — PENDING_SYNC stays honest MVP state.
+    // Android: executes native action, acks → SYNCED.
+    const userId = ctx?.userId ?? "user_demo";
+    this.worker.processPending(userId).catch(() => { /* ignore */ });
     return { success: true, data: { executionId } };
   }
 
@@ -149,5 +166,20 @@ export class RealExecutionEngine {
     for (const cb of this.listeners.get(id) ?? []) {
       try { cb(state); } catch { /* ignore */ }
     }
+  }
+
+  /** Start the Android worker (poll /api/sync → execute → ack). Web: no-op degrade. */
+  startWorker(userId: string, intervalMs = 5000): void {
+    this.worker.start(userId, intervalMs);
+  }
+
+  /** Stop the worker. */
+  stopWorker(): void {
+    this.worker.stop();
+  }
+
+  /** Process pending sync items once (poll + execute + ack). */
+  async processPending(userId: string): Promise<unknown[]> {
+    return this.worker.processPending(userId);
   }
 }

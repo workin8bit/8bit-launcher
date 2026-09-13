@@ -33,6 +33,7 @@ import { RealSchedulerAdapter } from "../../infrastructure/adapters/RealSchedule
 // Real authorities — D05/D06/D07/D07A/D07B
 import { RealExecutionEngine } from "../../infrastructure/authorities/RealExecutionEngine";
 import { RealExecutionRepository } from "../../infrastructure/authorities/RealExecutionRepository";
+import { AndroidSyncWorker } from "../../infrastructure/authorities/AndroidSyncWorker";
 import { RealSyncQueue } from "../../infrastructure/authorities/RealSyncQueue";
 import { RealMemoryRepository } from "../../infrastructure/authorities/RealMemoryRepository";
 import { RealNativeBridge } from "../../infrastructure/authorities/RealNativeBridge";
@@ -73,6 +74,14 @@ export function bootstrapApplication(opts: BootstrapOptions = {}): { container: 
     container.registerInstance(TOKENS.EmbeddingService, {}); // keyword-only fallback
     container.registerInstance(TOKENS.NativeBridge, new RealNativeBridge());
     container.registerInstance(TOKENS.Scheduler, new RealScheduler());
+
+    // D07B worker — poll /api/sync → execute native → ack /api/sync/ack
+    // Web: nativeBridge=null → degrade (PENDING_SYNC stays honest MVP state)
+    // Android: wire RealNativeBridge → executes native, acks → SYNCED
+    // Worker is a method on ExecutionEngine (engine.startWorker / processPending)
+    const engine = container.resolve(TOKENS.ExecutionEngine) as InstanceType<typeof RealExecutionEngine>;
+    const nativeBridge = container.resolve(TOKENS.NativeBridge) as InstanceType<typeof RealNativeBridge>;
+    engine.setNativeBridge(nativeBridge as never);
   }
 
   // 3. Adapters — D11 DI switch: test → Fake, prod/dev → Real (same contract)
